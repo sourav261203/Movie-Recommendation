@@ -62,7 +62,7 @@ if selected == 'Recommend Me a Movie':
                 poster = fetch_poster(df_recommend.iloc[movie_idx].poster_path)
                 
                 with cols[col_idx]:
-                    st.image(poster, use_column_width=True)
+                    st.image(poster, use_container_width=True)
                     st.write(f"**{movie_title}**")
 
 # ==========================================
@@ -78,7 +78,7 @@ elif selected == 'Describe a Movie':
         
         col1, col2 = st.columns([1, 2])
         with col1:
-            st.image(fetch_poster(movie_data['poster_path']), use_column_width=True)
+            st.image(fetch_poster(movie_data['poster_path']), use_container_width=True)
             
         with col2:
             st.header(movie_data['title'])
@@ -172,6 +172,6 @@ elif selected == 'Top Popular Movies':
                 if i + j < len(results):
                     movie = results.iloc[i + j]
                     with cols[j]:
-                        st.image(fetch_poster(movie['poster_path']), use_column_width=True)
+                        st.image(fetch_poster(movie['poster_path']), use_container_width=True)
                         st.markdown(f"**{movie['title']}**")
                         st.caption(f"⭐ {movie['averageRating']} | 🗓️ {movie['release_date'].year}")
