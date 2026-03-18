@@ -80,6 +80,10 @@ target/
 Dataset/
 Notebook/
 anaconda_projects/
+df_popular.pkl
+df_recommend.pkl
+similarity.pkl
+
 
 # IPython
 profile_default/
