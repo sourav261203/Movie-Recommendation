@@ -425,320 +425,122 @@ def load_data():
 
 df_popular, df_recommend, similarity = load_data()
 
+# Helper to fetch poster URL
+def fetch_poster(poster_path):
+    if pd.isna(poster_path):
+        return "https://via.placeholder.com/500x750?text=No+Poster+Available"
+    return "https://image.tmdb.org/t/p/w500/" + poster_path
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Top bar
-# ─────────────────────────────────────────────────────────────────────────────
+# Helper to format lists for UI display
+def format_list(item_list):
+    if isinstance(item_list, list):
+        return ", ".join(item_list)
+    return str(item_list)
 
-brand_col, nav_col = st.columns([1, 3])
+# --- Navigation Menu ---
+selected = option_menu(
+    menu_title=None,
+    options=['Recommend Me a Movie', 'Describe a Movie', 'Top Popular Movies'],
+    icons=['film', 'info-circle', 'fire'],
+    menu_icon='cast',
+    default_index=0,
+    orientation="horizontal",
+)
 
-with brand_col:
-    st.markdown(
-        '<div style="padding:.9rem 0 .4rem">'
-        '<div class="brand-title">CineScope</div>'
-        '<div class="brand-sub">Movie Intelligence</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+# ==========================================
+# SECTION 1: RECOMMEND ME A MOVIE
+# ==========================================
+if selected == 'Recommend Me a Movie':
+    st.title('🎯 Top 10 Recommended Movies')
+    
+    selected_movie = st.selectbox('Type or select a movie you like:', df_recommend['title'].values)
+    
+    if st.button('Recommend'):
+        # Find movie index
+        movie_index = df_recommend[df_recommend['title'] == selected_movie].index[0]
+        distances = similarity[movie_index]
+        # Get top 10 movies (skipping the first one which is the movie itself)
+        movies_list = sorted(list(enumerate(distances)), reverse=True, key=lambda x: x[1])[1:11]
+        
+        # Display 2 rows of 5 movies
+        for row in range(2):
+            cols = st.columns(5)
+            for col_idx in range(5):
+                movie_idx = movies_list[row * 5 + col_idx][0]
+                movie_title = df_recommend.iloc[movie_idx].title
+                poster = fetch_poster(df_recommend.iloc[movie_idx].poster_path)
+                
+                with cols[col_idx]:
+                    st.image(poster, use_column_width=True)
+                    st.write(f"**{movie_title}**")
 
-with nav_col:
-    selected = option_menu(
-        menu_title=None,
-        options=["Recommend Me", "Movie Details", "Top Movies"],
-        icons=["stars", "camera-reels-fill", "fire"],
-        default_index=0,
-        orientation="horizontal",
-        styles={
-            "container": {
-                "padding": ".6rem 0",
-                "background": "transparent",
-            },
-            "nav-link": {
-                "font-family": "'Barlow Condensed', sans-serif",
-                "font-size":   ".82rem",
-                "font-weight": "700",
-                "letter-spacing": ".12em",
-                "text-transform": "uppercase",
-                "color":       "#6b6b75",
-                "padding":     ".52rem 1.1rem",
-                "border-radius": "6px",
-            },
-            "nav-link-selected": {
-                "background":  "rgba(201,168,76,.12)",
-                "color":       "#c9a84c",
-                "border":      "1px solid rgba(201,168,76,.3)",
-            },
-            "icon": {"font-size": ".88rem"},
-        },
-    )
+# ==========================================
+# SECTION 2: DESCRIBE A MOVIE
+# ==========================================
+elif selected == 'Describe a Movie':
+    st.title('🎞️ Movie Description')
+    
+    selected_movie = st.selectbox('Select a movie to see details:', df_recommend['title'].values)
+    
+    if selected_movie:
+        movie_data = df_recommend[df_recommend['title'] == selected_movie].iloc[0]
+        
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.image(fetch_poster(movie_data['poster_path']), use_column_width=True)
+            
+        with col2:
+            st.header(movie_data['title'])
+            st.write(f"**📅 Release Date:** {pd.to_datetime(movie_data['release_date']).date() if not pd.isna(movie_data['release_date']) else 'N/A'}")
+            st.write(f"**⏱️ Runtime:** {movie_data['runtime']} minutes")
+            st.write(f"**⭐ Average Rating:** {movie_data['averageRating']}/10")
+            
+            st.subheader("Overview")
+            st.write(movie_data['overview'])
+            
+            # Using the processed list data
+            st.write(f"**🎭 Genres:** {format_list(df_popular[df_popular['title'] == selected_movie].iloc[0]['genres'])}")
+            st.write(f"**🎬 Directors:** {format_list(movie_data['directors'])}")
+            st.write(f"**👥 Top Cast:** {format_list(movie_data['cast'][:5])}")
 
-st.markdown('<hr style="margin:0 0 .4rem"/>', unsafe_allow_html=True)
+# ==========================================
+# SECTION 3: TOP POPULAR MOVIES (FILTERS)
+# ==========================================
+elif selected == 'Top Popular Movies':
+    st.title('🔥 Top Popular Movies')
+    
+    # 1. Sidebar Filters
+    st.sidebar.header("Filter Movies")
+    
+    # Extract unique genres and countries for multiselect
+    all_genres = sorted(list(set([g for sublist in df_popular['genres'] for g in sublist if g])))
+    all_countries = sorted(list(set([c for sublist in df_popular['production_countries'] for c in sublist if c])))
+    
+    selected_genres = st.sidebar.multiselect("Select Genres", all_genres)
+    selected_countries = st.sidebar.multiselect("Production Countries", all_countries)
+    
+    # Year Slider
+    min_year = int(df_popular['release_date'].dt.year.min())
+    max_year = int(df_popular['release_date'].dt.year.max())
+    year_range = st.sidebar.slider("Release Year Range", min_year, max_year, (2000, max_year))
+    
+    # Runtime Slider
+    max_runtime = int(df_popular['runtime'].max())
+    runtime_range = st.sidebar.slider("Runtime Range (minutes)", 0, max_runtime, (60, 200))
+    
+    # Top N slider
+    top_n = st.sidebar.slider("Number of movies to show", 10, 50, 20)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE: Recommend Me
-# ─────────────────────────────────────────────────────────────────────────────
-
-if selected == "Recommend Me":
-    page_header("🎯", "Recommend Me a Movie", "Content-based top-10 similar films")
-
-    chosen = st.selectbox(
-        "Pick a movie you love",
-        df_recommend["title"].values,
-        label_visibility="collapsed",
-        placeholder="Type or select a movie…",
-    )
-
-    if st.button("Find Similar Movies  →"):
-        idx       = df_recommend[df_recommend["title"] == chosen].index[0]
-        distances = similarity[idx]
-        top10     = sorted(enumerate(distances), reverse=True, key=lambda x: x[1])[1:11]
-
-        st.markdown(
-            f'<p style="font-size:.82rem;color:var(--muted);margin:.4rem 0 1.1rem">'
-            f'Because you liked '
-            f'<strong style="color:var(--gold)">{chosen}</strong></p>',
-            unsafe_allow_html=True,
-        )
-
-        for row_start in range(0, 10, 5):
-            cols = st.columns(5, gap="small")
-            for ci, (midx, _score) in enumerate(top10[row_start:row_start + 5]):
-                row = df_recommend.iloc[midx]
-                try:
-                    year = pd.to_datetime(row.get("release_date", "")).year
-                except Exception:
-                    year = None
-                with cols[ci]:
-                    st.markdown(
-                        movie_card_html(
-                            row["title"],
-                            poster_url(row.get("poster_path")),
-                            rating=row.get("averageRating"),
-                            year=year,
-                        ),
-                        unsafe_allow_html=True,
-                    )
-            st.markdown("<div style='margin-bottom:.7rem'/>", unsafe_allow_html=True)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE: Movie Details
-# ─────────────────────────────────────────────────────────────────────────────
-
-elif selected == "Movie Details":
-    page_header("🎞️", "Movie Details", "Full metadata, crew and overview")
-
-    chosen = st.selectbox(
-        "Select a movie",
-        df_recommend["title"].values,
-        label_visibility="collapsed",
-    )
-
-    if chosen:
-        rec = df_recommend[df_recommend["title"] == chosen].iloc[0]
-        pop = df_popular[df_popular["title"] == chosen]
-
-        col_poster, col_info = st.columns([1, 2], gap="large")
-
-        with col_poster:
-            st.image(poster_url(rec.get("poster_path")), use_container_width=True)
-
-        with col_info:
-            st.markdown(
-                f'<div class="detail-title">{rec["title"]}</div>',
-                unsafe_allow_html=True,
-            )
-
-            # Genre badges
-            genres_raw = (
-                pop["genres"].iloc[0]
-                if not pop.empty and isinstance(pop["genres"].iloc[0], list)
-                else []
-            )
-            if genres_raw:
-                st.markdown(
-                    "".join(f'<span class="badge">{g}</span>' for g in genres_raw[:7]),
-                    unsafe_allow_html=True,
-                )
-
-            st.markdown("<div style='margin:.5rem 0'/>", unsafe_allow_html=True)
-
-            def meta_row(label: str, value: str):
-                st.markdown(
-                    f'<div class="meta-row"><strong>{label}</strong> {value}</div>',
-                    unsafe_allow_html=True,
-                )
-
-            # Release date
-            try:
-                rd = pd.to_datetime(rec.get("release_date", ""))
-                meta_row("📅 Release", rd.strftime("%B %d, %Y"))
-            except Exception:
-                meta_row("📅 Release", "N/A")
-
-            meta_row("⏱️ Runtime", f"{rec.get('runtime', '—')} min")
-
-            rating = rec.get("averageRating")
-            if rating:
-                r = float(rating)
-                stars = "★" * round(r / 2)
-                meta_row(
-                    "⭐ Rating",
-                    f'<span style="color:var(--gold)">{r:.1f}/10 &nbsp;{stars}</span>',
-                )
-
-            # Overview
-            st.markdown(
-                f'<div class="overview-block">'
-                f'{rec.get("overview", "No overview available.")}'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-
-            # Crew
-            def clean_names(raw) -> str:
-                if not isinstance(raw, list):
-                    return "—"
-                return ", ".join(
-                    n.strip() for n in raw if str(n).strip()
-                ) or "—"
-
-            c1, c2, c3 = st.columns(3, gap="medium")
-            for col, lbl, val in [
-                (c1, "🎬 Director", clean_names(rec.get("directors", [])[:2])),
-                (c2, "✍️ Writer",   clean_names(rec.get("writers",   [])[:2])),
-                (c3, "🎭 Top Cast", clean_names(rec.get("cast",      [])[:5])),
-            ]:
-                with col:
-                    st.markdown(
-                        f'<div class="crew-lbl">{lbl}</div>'
-                        f'<div class="crew-val">{val}</div>',
-                        unsafe_allow_html=True,
-                    )
-
-            # Countries
-            if not pop.empty:
-                countries = pop["production_countries"].iloc[0]
-                if isinstance(countries, list) and countries:
-                    st.markdown("<div style='margin-top:.9rem'/>", unsafe_allow_html=True)
-                    st.markdown(
-                        f'<div class="crew-lbl">🌍 Production Countries</div>'
-                        f'<div class="crew-val">{", ".join(countries)}</div>',
-                        unsafe_allow_html=True,
-                    )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE: Top Movies
-# ─────────────────────────────────────────────────────────────────────────────
-
-elif selected == "Top Movies":
-    page_header("🔥", "Top Popular Movies", "Filter by genre · country · year · runtime")
-
-    # ── Build option lists from data ──────────────────────────────────────
-    all_genres = ["All Genres"] + sorted({
-        g for sub in df_popular["genres"]
-        if isinstance(sub, list)
-        for g in sub if g
-    })
-    all_countries = ["All Countries"] + sorted({
-        c for sub in df_popular["production_countries"]
-        if isinstance(sub, list)
-        for c in sub if c
-    })
-
-    YEAR_OPTIONS = {
-        "All Years":   (0,    9999),
-        "2020s":       (2020, 9999),
-        "2010s":       (2010, 2019),
-        "2000s":       (2000, 2009),
-        "1990s":       (1990, 1999),
-        "1980s":       (1980, 1989),
-        "Before 1980": (0,    1979),
-    }
-
-    RUNTIME_OPTIONS = {
-        "Any Length":          (0,   9999),
-        "Short  (< 90 min)":   (0,   89),
-        "Standard  (90–120)":  (90,  120),
-        "Long  (120–150 min)": (121, 150),
-        "Epic  (> 150 min)":   (151, 9999),
-    }
-
-    # ── Inline filter row ─────────────────────────────────────────────────
-    st.markdown(
-        '<div style="background:var(--card);border:1px solid var(--border);'
-        'border-radius:10px;padding:1.1rem 1.3rem 0.9rem;margin-bottom:1.4rem">',
-        unsafe_allow_html=True,
-    )
-
-    fc1, fc2, fc3, fc4 = st.columns(4, gap="medium")
-
-    with fc1:
-        st.markdown(
-            '<div class="crew-lbl" style="margin-bottom:.35rem">🎭 Genre</div>',
-            unsafe_allow_html=True,
-        )
-        sel_genre = st.selectbox(
-            "Genre", all_genres,
-            label_visibility="collapsed",
-            key="filter_genre",
-        )
-
-    with fc2:
-        st.markdown(
-            '<div class="crew-lbl" style="margin-bottom:.35rem">🌍 Country</div>',
-            unsafe_allow_html=True,
-        )
-        sel_country = st.selectbox(
-            "Country", all_countries,
-            label_visibility="collapsed",
-            key="filter_country",
-        )
-
-    with fc3:
-        st.markdown(
-            '<div class="crew-lbl" style="margin-bottom:.35rem">📅 Year</div>',
-            unsafe_allow_html=True,
-        )
-        sel_year_label = st.selectbox(
-            "Year", list(YEAR_OPTIONS.keys()),
-            label_visibility="collapsed",
-            key="filter_year",
-        )
-
-    with fc4:
-        st.markdown(
-            '<div class="crew-lbl" style="margin-bottom:.35rem">⏱️ Runtime</div>',
-            unsafe_allow_html=True,
-        )
-        sel_runtime_label = st.selectbox(
-            "Runtime", list(RUNTIME_OPTIONS.keys()),
-            label_visibility="collapsed",
-            key="filter_runtime",
-        )
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # Resolve range tuples
-    yr_lo,  yr_hi  = YEAR_OPTIONS[sel_year_label]
-    rt_lo,  rt_hi  = RUNTIME_OPTIONS[sel_runtime_label]
-
-    # ── Filter & sort ─────────────────────────────────────────────────────
-    def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
-        f = df.copy()
-
-        # Year filter
-        f = f[
-            (f["release_date"].dt.year >= yr_lo) &
-            (f["release_date"].dt.year <= yr_hi)
-        ]
-
-        # Runtime filter
-        f = f[
-            (f["runtime"] >= rt_lo) &
-            (f["runtime"] <= rt_hi)
+    # 2. Filtering Logic (Adapted from Notebook)
+    def filter_popular_movies(df, start_yr, end_yr, run_low, run_high, genres, countries, n):
+        filtered = df.copy()
+        
+        # Year and Runtime Filter
+        filtered = filtered[
+            (filtered["release_date"].dt.year >= start_yr) & 
+            (filtered["release_date"].dt.year <= end_yr) &
+            (filtered["runtime"] >= run_low) & 
+            (filtered["runtime"] <= run_high)
         ]
 
         # Genre filter
@@ -798,13 +600,6 @@ elif selected == "Top Movies":
                     mv   = results.iloc[i + j]
                     year = mv["release_date"].year if pd.notna(mv["release_date"]) else None
                     with cols[j]:
-                        st.markdown(
-                            movie_card_html(
-                                mv["title"],
-                                poster_url(mv.get("poster_path")),
-                                rating=mv["averageRating"],
-                                year=year,
-                            ),
-                            unsafe_allow_html=True,
-                        )
-            st.markdown("<div style='margin-bottom:.55rem'/>", unsafe_allow_html=True)
+                        st.image(fetch_poster(movie['poster_path']), use_column_width=True)
+                        st.markdown(f"**{movie['title']}**")
+                        st.caption(f"⭐ {movie['averageRating']} | 🗓️ {movie['release_date'].year}")
